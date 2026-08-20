@@ -29,6 +29,7 @@ import com.ibm.websphere.crypto.PasswordUtil;
 import com.ibm.websphere.ras.Tr;
 import com.ibm.websphere.ras.TraceComponent;
 import com.ibm.ws.jndi.internal.literals.LiteralParser;
+import com.ibm.websphere.ras.annotation.Sensitive;
 
 /**
  * <p>
@@ -65,7 +66,7 @@ public class JNDIEntry {
 
         if (jndiName == null || jndiName.isEmpty() || originalValue == null || originalValue.isEmpty()) {
             if (TraceComponent.isAnyTracingEnabled() && tc.isDebugEnabled()) {
-                Tr.debug(tc, "Unable to register JNDIEntry with jndiName " + jndiName + " and value " + originalValue + " because both must be set");
+                Tr.debug(tc, "Unable to register JNDIEntry with jndiName " + jndiName + " and value because both must be set");
             }
             return;
         }
@@ -85,13 +86,13 @@ public class JNDIEntry {
      * @param decode if true, val is decoded if it's encrypted, otherwise val is parsed directly.
      * @return the parsed literal value
      */
-    static Object parseLiteral(String val, boolean decode) {
+    static Object parseLiteral(@Sensitive String val, boolean decode) {
         String decodedVal = val;
         if (decode && PasswordUtil.isEncrypted(val)) {
             try {
                 decodedVal = PasswordUtil.decode(val);
             } catch (Exception e) {
-                Tr.error(tc, "jndi.decode.failed", val, e);
+                Tr.error(tc, "jndi.decode.failed", e);
             }
         }
         return LiteralParser.parse(decodedVal);

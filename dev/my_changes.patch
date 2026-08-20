@@ -1,0 +1,83 @@
+diff --git a/dev/com.ibm.ws.jndi.open_fat/fat/src/com/ibm/ws/jndi/global/fat/JNDIEntryTests.java b/dev/com.ibm.ws.jndi.open_fat/fat/src/com/ibm/ws/jndi/global/fat/JNDIEntryTests.java
+index 8adda82c397..16c34c4b1f9 100755
+--- a/dev/com.ibm.ws.jndi.open_fat/fat/src/com/ibm/ws/jndi/global/fat/JNDIEntryTests.java
++++ b/dev/com.ibm.ws.jndi.open_fat/fat/src/com/ibm/ws/jndi/global/fat/JNDIEntryTests.java
+@@ -18,17 +18,21 @@ import static org.junit.Assert.assertEquals;
+ import static org.junit.Assert.assertNotNull;
+ 
+ import org.junit.BeforeClass;
++import org.junit.Rule;
+ import org.junit.Test;
++import org.junit.rules.TestRule;
+ import org.junit.runner.RunWith;
+ 
+ import com.ibm.websphere.simplicity.ShrinkHelper;
+ import com.ibm.websphere.simplicity.config.ServerConfiguration;
+ 
++import componenttest.annotation.CheckForLeakedPasswords;
+ import componenttest.annotation.Server;
+ import componenttest.custom.junit.runner.FATRunner;
+ import componenttest.topology.impl.LibertyServer;
+ import componenttest.topology.utils.FATServletClient;
+ import componenttest.topology.utils.HttpUtils;
++import componenttest.vulnerability.LeakedPasswordChecker;
+ 
+ /**
+  * Test to make sure that JNDIEntry registers the correct services
+@@ -48,6 +52,9 @@ public class JNDIEntryTests extends FATServletClient {
+     @Server("jndi_entry_dynamic_update")
+     public static LibertyServer jndi_entry_dynamic_update_server;
+ 
++    @Rule
++    public TestRule passwordChecker = new LeakedPasswordChecker(jndi_entry_decode_server);
++
+     @BeforeClass
+     public static void beforeClass() throws Exception {
+         ShrinkHelper.exportDropinAppToServer(jndi_entry_fat_server, FATSuite.READ_JNDI_ENTRY_WAR);
+@@ -102,6 +109,7 @@ public class JNDIEntryTests extends FATServletClient {
+     }
+ 
+     @Test
++    @CheckForLeakedPasswords("not_encrypted_passw0rd")
+     public void testJNDIDecode() throws Exception {
+         // Grab the server
+         jndi_entry_decode_server.startServer();
+@@ -116,11 +124,14 @@ public class JNDIEntryTests extends FATServletClient {
+ 
+             String decryptedStringValue = "foobar";
+             String decryptedIntValue = "12345";
++            String plainTextJndiEntry = "not_encrypted_passw0rd";
+             // Check to make sure the decrypted JndiEntry value for "{xor}OTAwPT4t" is returned
+             HttpUtils.findStringInUrl(jndi_entry_decode_server, "/ReadJndiEntry/ReadJndiEntry",
+                                       "JNDI Entry found for stringJndiEntry", "Value of JNDI Entry is: " + decryptedStringValue);
+             HttpUtils.findStringInUrl(jndi_entry_decode_server, "/ReadJndiEntry/ReadJndiEntry",
+                                       "JNDI Entry found for stringJndiEntry", "Value of JNDI Entry is: " + decryptedIntValue);
++            HttpUtils.findStringInUrl(jndi_entry_decode_server, "/ReadJndiEntry/ReadJndiEntry",
++                                      "JNDI Entry found for stringPlainTextJndiEntry", "Value of JNDI Entry is: " + plainTextJndiEntry);
+         } finally {
+             jndi_entry_decode_server.stopServer();
+         }
+diff --git a/dev/com.ibm.ws.jndi.open_fat/publish/servers/jndi_entry_decode/server.xml b/dev/com.ibm.ws.jndi.open_fat/publish/servers/jndi_entry_decode/server.xml
+index 99cbe810506..2936c2714eb 100755
+--- a/dev/com.ibm.ws.jndi.open_fat/publish/servers/jndi_entry_decode/server.xml
++++ b/dev/com.ibm.ws.jndi.open_fat/publish/servers/jndi_entry_decode/server.xml
+@@ -10,5 +10,7 @@
+     <jndiEntry jndiName="stringJndiEntry" value="{xor}OTAwPT4t" decode="true"/>
+     <!-- value="12345" (type Integer)-->
+     <jndiEntry jndiName="doubleJndiEntry" value="{xor}bm1sa2o=" decode="true"/>
++    <jndiEntry jndiName="stringPlainTextJndiEntry" value="not_encrypted_passw0rd" decode="true"/>
++    
+     <javaPermission className="java.lang.RuntimePermission" name="getClassLoader"/>
+ </server>
+diff --git a/dev/com.ibm.ws.jndi.open_fat/test-applications/ReadJndiEntry.war/src/com/ibm/ws/jndi/fat/web/ReadJndiEntry.java b/dev/com.ibm.ws.jndi.open_fat/test-applications/ReadJndiEntry.war/src/com/ibm/ws/jndi/fat/web/ReadJndiEntry.java
+index 82a72da16e4..0118749b1e1 100755
+--- a/dev/com.ibm.ws.jndi.open_fat/test-applications/ReadJndiEntry.war/src/com/ibm/ws/jndi/fat/web/ReadJndiEntry.java
++++ b/dev/com.ibm.ws.jndi.open_fat/test-applications/ReadJndiEntry.war/src/com/ibm/ws/jndi/fat/web/ReadJndiEntry.java
+@@ -41,6 +41,7 @@ public class ReadJndiEntry extends HttpServlet {
+         // Get the OSGi bundle context so we can look up the service registrations
+         findJndiEntry(String.class, "stringJndiEntry", writer);
+         findJndiEntry(Double.class, "doubleJndiEntry", writer);
++        findJndiEntry(Double.class, "stringPlainTextJndiEntry", writer);
+     }
+ 
+     private void findJndiEntry(Class jndiClass, String jndiName, PrintWriter writer) {
